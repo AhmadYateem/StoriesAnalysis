@@ -1,5 +1,5 @@
 /**
- * ChatPage — AI assistant powered by LLaMA 3.1 via HuggingFace Inference API.
+ * ChatPage — AI assistant powered by LLaMA 4 Scout (17B-16E) via HuggingFace Inference API.
  * Features:
  *   - Conversation history persisted in local state
  *   - System prompt injected with analysis summary for contextual answers
@@ -137,7 +137,7 @@ export default function ChatPage() {
               </h1>
               <p className="text-muted-foreground text-sm mt-1 flex items-center gap-2">
                 <Sparkles className="w-3.5 h-3.5" />
-                {useFallback ? "Rule-based mode (LLaMA unavailable)" : "LLaMA 3.1 via HuggingFace Inference API"}
+                {useFallback ? "Rule-based mode (LLaMA unavailable)" : "LLaMA 4 Scout · 17B-16E via HuggingFace"}
               </p>
             </div>
             {messages.length > 0 && (
