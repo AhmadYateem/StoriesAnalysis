@@ -71,6 +71,16 @@ def _run_pipeline(data: dict) -> dict:
     """
     Execute the full analysis pipeline on 4 DataFrames and return
     a JSON-serializable dict matching the React AnalysisData interface.
+
+    Steps:
+        1. Compute chain-level KPIs (revenue, profit, margin, counts)
+        2. Build seasonality heatmap and monthly revenue series
+        3. Run all 5 margin-leak detectors and build waterfall + cards
+        4. Build menu engineering matrix (Stars / Plowhorses / Puzzles / Dogs)
+        5. Compute modifier attachment rates and upsell opportunity
+        6. Forecast 2026 revenue per branch via GradientBoosting
+        7. Cluster branches into 4 strategic segments via KMeans
+        8. Assemble action plan with dollar-quantified impact estimates
     """
     monthly    = data["monthly_sales"]
     products   = data["product_profitability"]
@@ -483,7 +493,10 @@ def upload_and_analyze():
 
 
 # ─── AI Chat via HuggingFace Inference API ───────────────────────────────────
-# Using Qwen2.5-7B-Instruct — no license gate, strong instruction following
+# We use Meta LLaMA 4 Scout 17B (16-expert MoE) served through HuggingFace
+# Router.  The API key is kept server-side to avoid client-side exposure.
+# A rule-based fallback is implemented in the React frontend ChatWidget
+# if this endpoint is unavailable.
 HF_MODEL = "meta-llama/Llama-4-Scout-17B-16E-Instruct:nscale"
 HF_API_URL = "https://router.huggingface.co/v1/chat/completions"
 

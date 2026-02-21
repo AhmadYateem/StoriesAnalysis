@@ -23,7 +23,12 @@ warnings.filterwarnings('ignore')
 
 
 def csv_split(line):
-    """Split a CSV line properly handling quoted fields with commas."""
+    """Split a CSV line properly handling quoted fields with commas.
+
+    The POS system exports contain fields like '"1,234"' where a naive
+    str.split(',') would break numeric values.  We delegate to Python's
+    csv.reader which respects RFC 4180 quoting rules.
+    """
     try:
         reader = csv.reader(io.StringIO(line))
         return next(reader)
@@ -33,6 +38,9 @@ def csv_split(line):
 # ============================================================
 # BRANCH NAME NORMALIZATION
 # ============================================================
+# The 4 raw CSV files use 26 inconsistent branch name variants
+# (mixed case, dots, abbreviations).  This lookup table maps every
+# observed variant to one canonical name per physical location.
 BRANCH_NAME_MAP = {
     "Stories - Bir Hasan": "Stories Bir Hasan",
     "Stories Bir Hasan": "Stories Bir Hasan",
@@ -185,9 +193,12 @@ def parse_monthly_sales(filepath):
                 records.append((record, values))
             continue
 
-    # Now assemble — each branch appears in multiple "pages" of the CSV
-    # (Jan-Sep on first appearance, Oct-Dec+Total on second)
-    branch_data = {}  # key = (year, branch)
+    # --- Two-pass assembly ---
+    # The POS export splits each branch across two CSV "pages":
+    #   Page 1 → Jan through Sep (up to 9 values)
+    #   Page 2 → Oct through Dec + Total_By_Year (up to 4 values)
+    # We merge both pages by keying on (year, branch).
+    branch_data = {}  # key = (year, branch), value = list of 13 floats
 
     for record, values in records:
         key = (record['Year'], record['Branch_Raw'])
@@ -340,7 +351,10 @@ def parse_product_profitability(filepath):
             if qty == 0 and total_price == 0 and total_cost == 0 and total_profit == 0 and not is_aggregate:
                 continue
 
-            # Compute true revenue
+            # Compute true revenue — critical data quality fix.
+            # The POS truncates TotalPrice at large values (overflow bug).
+            # For aggregate rows, TotalPrice is ALWAYS unreliable.
+            # TrueRevenue = TotalCost + TotalProfit is algebraically exact.
             if is_aggregate:
                 true_revenue = total_cost + total_profit
             else:

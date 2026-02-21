@@ -57,7 +57,9 @@ def build_menu_matrix(product_df, min_qty=5):
         0
     )
 
-    # Compute medians for quadrant thresholds
+    # Compute medians for quadrant thresholds.
+    # The median provides a robust center that is unaffected by outlier
+    # products (e.g., one viral seasonal item skewing the mean).
     med_qty = chain['Total_Qty'].median()
     med_margin = chain['Margin_Pct'].median()
 

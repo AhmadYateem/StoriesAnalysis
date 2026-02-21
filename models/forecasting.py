@@ -54,7 +54,9 @@ def forecast_branch_xgboost(monthly_df, branch, forecast_months=11):
     if len(ts) < 3:
         return None
 
-    # Feature engineering
+    # Feature engineering — encode month as cyclical (sin/cos) so
+    # January and December are close in feature space, plus a linear
+    # trend for secular growth and raw month for residual seasonality.
     ts['month_sin'] = np.sin(2 * np.pi * ts['Month'] / 12)
     ts['month_cos'] = np.cos(2 * np.pi * ts['Month'] / 12)
     ts['months_since_start'] = (ts['Year'] - 2025) * 12 + ts['Month']
@@ -88,7 +90,8 @@ def forecast_branch_xgboost(monthly_df, branch, forecast_months=11):
     # Ensure non-negative
     predictions = np.maximum(predictions, 0)
 
-    # Simple confidence interval (±20% based on training residuals)
+    # Simple confidence interval derived from training residuals.
+    # 1.5x std gives approximately 86% coverage under Gaussian assumption.
     train_preds = model.predict(X)
     residual_std = np.std(y - train_preds)
 

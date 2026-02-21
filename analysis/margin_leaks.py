@@ -14,6 +14,10 @@ import plotly.graph_objects as go
 def find_negative_margin_products(product_df):
     """
     Find all products with negative profit margins (losing money on each sale).
+
+    Filters to individual (non-aggregate) product rows where Qty > 0 and
+    TotalProfit < 0.  Each row represents a branch-service-product combo
+    that is being sold below its cost of goods.
     """
     df = product_df[
         (~product_df['IsAggregate']) &
@@ -34,7 +38,8 @@ def find_negative_margin_products(product_df):
 def find_zero_revenue_modifiers(product_df):
     """
     Find modifiers/products charged at $0 but with real costs.
-    These are hidden margin destroyers.
+    These are hidden margin destroyers: oat milk, decaf shots, etc.
+    that the POS rings up at zero price while COGS are still incurred.
     """
     df = product_df[
         (~product_df['IsAggregate']) &

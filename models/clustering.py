@@ -86,6 +86,10 @@ def build_branch_features(monthly_df, category_df, product_df):
 def cluster_branches(features_df, n_clusters=4):
     """
     Apply KMeans clustering on branch features.
+
+    We use k=4 selected by interpretability (confirmed with Silhouette
+    score sweep in notebooks).  Features are StandardScaler-normalized
+    so revenue magnitude does not dominate the distance metric.
     """
     feature_cols = ['Total_Revenue', 'Seasonality_CV', 'Growth_Pct',
                     'Beverage_Share_Pct', 'Profit_Margin_Pct', 'Revenue_Per_Month']
@@ -101,7 +105,9 @@ def cluster_branches(features_df, n_clusters=4):
     features_df = features_df.copy()
     features_df['Cluster_ID'] = clusters
 
-    # Name clusters based on characteristics
+    # Name clusters heuristically based on relative revenue and growth.
+    # The logic mirrors a BCG-style framework: high-rev + growth = Flagship,
+    # high-rev only = Cash Cow, growth only = Growth Engine, else Emerging.
     cluster_names = {}
     for c in range(n_clusters):
         cluster_data = features_df[features_df['Cluster_ID'] == c]
