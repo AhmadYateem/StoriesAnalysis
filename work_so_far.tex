@@ -1,0 +1,538 @@
+\documentclass[11pt,a4paper]{article}
+
+% ── Packages ──
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{enumitem}
+\usepackage{xcolor}
+\usepackage{titlesec}
+\usepackage{hyperref}
+\usepackage{amsmath}
+\usepackage{tabularx}
+\usepackage{longtable}
+\usepackage{fancyhdr}
+\usepackage{parskip}
+
+% ── Colors ──
+\definecolor{coffee}{RGB}{139,69,19}
+\definecolor{darkbrown}{RGB}{60,31,14}
+\definecolor{lightcoffee}{RGB}{245,240,235}
+\definecolor{accent}{RGB}{210,105,30}
+\definecolor{critred}{RGB}{231,76,60}
+\definecolor{okgreen}{RGB}{46,204,113}
+
+% ── Styling ──
+\hypersetup{colorlinks=true,linkcolor=coffee,urlcolor=accent,citecolor=darkbrown}
+\titleformat{\section}{\Large\bfseries\color{darkbrown}}{}{0em}{}[\titlerule]
+\titleformat{\subsection}{\large\bfseries\color{coffee}}{}{0em}{}
+\titleformat{\subsubsection}{\normalsize\bfseries\color{accent}}{}{0em}{}
+
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\small\color{coffee}Stories Coffee --- Strategic Analysis}
+\fancyhead[R]{\small\color{coffee}Work So Far}
+\fancyfoot[C]{\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+
+% ── Document ──
+\begin{document}
+
+% ════════════════════════════════════════
+% TITLE PAGE
+% ════════════════════════════════════════
+\begin{titlepage}
+\centering
+\vspace*{3cm}
+{\Huge\bfseries\color{darkbrown} Stories Coffee\par}
+\vspace{0.5cm}
+{\LARGE\color{coffee} Strategic Intelligence Report\par}
+\vspace{0.3cm}
+{\Large Work So Far\par}
+\vspace{2cm}
+{\large
+25 Branches \,$\cdot$\, 300+ Products \,$\cdot$\, Full-Year 2025 + January 2026\par
+}
+\vspace{1.5cm}
+\rule{0.6\textwidth}{0.4pt}\par
+\vspace{1cm}
+{\large\color{accent}
+\textbf{Key Headline:} We identified \textbf{62\,M~LBP} in margin leaks,\\[4pt]
+quantified a \textbf{16.9\,M~LBP} modifier upsell opportunity,\\[4pt]
+and project \textbf{+26\% YoY growth} for 2026.
+}
+\vfill
+{\small February 2026}
+\end{titlepage}
+
+\tableofcontents
+\newpage
+
+% ════════════════════════════════════════
+\section{Data Cleaning \& Preparation}
+% ════════════════════════════════════════
+
+We ingest four raw POS CSV exports covering all 25 Stories Coffee branches across full-year 2025 and January 2026. The raw files are messy: they contain repeated page headers, hierarchical row structures (branch $\to$ service type $\to$ category $\to$ section $\to$ product), and inconsistent branch naming.
+
+\subsection{What We Do}
+
+\begin{enumerate}[leftmargin=*]
+  \item \textbf{Quoted-Field CSV Parsing.}
+    The POS system exports fields that contain commas inside quoted strings (e.g.\ product names like \texttt{"Cheese Cake, Blueberry"}). We use Python's \texttt{csv.reader} rather than na\"ive comma splitting to handle this correctly.
+
+  \item \textbf{Page Header Removal.}
+    Every few hundred rows, the POS system re-prints a date header (e.g.\ \texttt{22-Jan-26}) and column header row. We detect these with a regex pattern \texttt{\^{}\textbackslash d\{1,2\}-\textbackslash w\{3\}-\textbackslash d\{2\}} and strip them out.
+
+  \item \textbf{Branch Name Normalisation.}
+    The raw data uses inconsistent casing and punctuation (\texttt{Stories alay}, \texttt{Stories - Bir Hasan}, \texttt{Stories.}). We map all 26 raw variants to a canonical set of 25 branch names plus one ``Unknown (Closed)'' bucket.
+
+  \item \textbf{Region Assignment.}
+    Each normalised branch is mapped to one of 7 geographic regions:
+    Beirut Central, Greater Beirut, North, Metn, South, Mountains, and Malls \& Special.
+
+  \item \textbf{Hierarchical State-Machine Parsing.}
+    For the product-level file, we track the current branch, service type, category, and section as we read line by line. Each product row inherits its parent context.
+
+  \item \textbf{The TrueRevenue Fix.}
+    The POS system truncates the \texttt{TotalPrice} column for large values. We discovered that:
+    \[
+      \text{TrueRevenue} = \text{TotalCost} + \text{TotalProfit}
+    \]
+    is always correct, so we use this as the canonical revenue figure everywhere.
+
+  \item \textbf{Unit Economics.}
+    For every product row we compute:
+    \[
+      \text{UnitRevenue} = \frac{\text{TrueRevenue}}{\text{Qty}}, \quad
+      \text{UnitCost} = \frac{\text{TotalCost}}{\text{Qty}}, \quad
+      \text{UnitProfit} = \frac{\text{TotalProfit}}{\text{Qty}}
+    \]
+
+  \item \textbf{Parquet Caching.}
+    Cleaned DataFrames are saved as Parquet files for fast, type-safe reloading on subsequent runs.
+\end{enumerate}
+
+\subsection{What We Produce}
+
+Four clean datasets:
+
+\begin{table}[h]
+\centering
+\begin{tabular}{@{}llr@{}}
+\toprule
+\textbf{Dataset} & \textbf{Grain} & \textbf{Rows} \\
+\midrule
+Monthly Sales       & Branch $\times$ Year (monthly columns)          & 48     \\
+Product Profitability & Branch $\times$ Service $\times$ Product      & 13,089 \\
+Sales by Group      & Branch $\times$ Division $\times$ Group $\times$ Product & 12,199 \\
+Category Summary    & Branch $\times$ Category (Beverages / Food)     & 75     \\
+\bottomrule
+\end{tabular}
+\caption{Cleaned datasets and their granularity.}
+\end{table}
+
+\newpage
+% ════════════════════════════════════════
+\section{Branch Performance Analysis}
+% ════════════════════════════════════════
+
+\subsection{Chain-Level KPIs}
+
+We aggregate across all branches (non-aggregate rows of the Category Summary) to compute headline numbers:
+
+\begin{table}[h]
+\centering
+\begin{tabular}{@{}lr@{}}
+\toprule
+\textbf{KPI} & \textbf{Value} \\
+\midrule
+Total Revenue (2025)    & 840,458,583 LBP \\
+Total Profit            & 598,228,696 LBP \\
+Average Profit Margin   & 71.2\% \\
+Active Branches         & 25 \\
+Unique Products         & 300+ \\
+Total Units Sold        & Chain-wide aggregate \\
+\bottomrule
+\end{tabular}
+\caption{Chain-level KPIs derived from the Category Summary.}
+\end{table}
+
+\textbf{How:}
+\[
+\text{Margin} = \frac{\sum \text{TotalProfit}}{\sum \text{TrueRevenue}} \times 100
+\]
+
+\subsection{BCG Performance Quadrant}
+
+We build a scatter plot for all 25 branches where:
+\begin{itemize}[leftmargin=*]
+  \item \textbf{X-axis} = 2025 annual revenue (\texttt{Total\_By\_Year} from Monthly Sales).
+  \item \textbf{Y-axis} = Year-over-year growth, computed as:
+    \[
+      \text{Growth} = \frac{\text{Jan 2026 Revenue} - \text{Jan 2025 Revenue}}{\text{Jan 2025 Revenue}} \times 100
+    \]
+  \item \textbf{Bubble size} = total quantity sold.
+  \item \textbf{Colour} = quadrant assignment.
+\end{itemize}
+
+The median revenue and median growth rate define four quadrants:
+\begin{itemize}
+  \item \textbf{Star} --- High revenue + high growth (protect and invest).
+  \item \textbf{Cash Cow} --- High revenue + low growth (harvest profits).
+  \item \textbf{Question Mark} --- Low revenue + high growth (evaluate potential).
+  \item \textbf{Dog} --- Low revenue + low growth (review viability).
+\end{itemize}
+
+\subsection{Seasonality Analysis}
+
+We sum monthly revenues across all branches for 2025 to produce a chain-wide trend line.
+\begin{itemize}[leftmargin=*]
+  \item The \textbf{peak month} and \textbf{trough month} are automatically identified and annotated.
+  \item A \textbf{branch $\times$ month heatmap} is generated, where each branch's monthly values are normalised by that branch's own peak month (relative seasonality), so we can see which branches are more seasonal than others.
+  \item \textbf{Findings:} A clear dip is observed during Ramadan, with a summer peak.
+\end{itemize}
+
+\subsection{Category Mix (Beverages vs.\ Food)}
+
+For each branch, we pivot the Category Summary:
+\[
+\text{Beverage Share} = \frac{\text{Beverage Revenue}}{\text{Beverage Revenue} + \text{Food Revenue}} \times 100
+\]
+
+A stacked bar chart shows the revenue split, allowing us to identify branches that are over- or under-indexed on food.
+
+\subsection{Service Type Distribution}
+
+We group the product-level dataset by branch and service channel (TAKE AWAY, TABLE, Toters). A stacked bar chart of revenue per channel reveals each branch's operational profile and delivery dependency.
+
+\subsection{Top and Bottom Branches}
+
+We rank all branches by 2025 total revenue and extract the top~5 and bottom~5 for quick identification of strongest and weakest performers.
+
+\newpage
+% ════════════════════════════════════════
+\section{Margin Leak Analysis --- ``The 62\,M Report''}
+% ════════════════════════════════════════
+
+This is the centrepiece finding: we identify and \textbf{dollar-quantify} every source of profit leakage across the chain. Five distinct leak categories are detected, totalling \textbf{62,013,109~LBP} in annual recoverable margin.
+
+\subsection{Leak 1: Negative Margin Products {\normalfont\color{critred}(30.1\,M)}}
+
+\textbf{Detection:}
+We filter all product rows where $\text{Qty} > 0$ and $\text{TotalProfit} < 0$ (excluding aggregate subtotals). The loss amount is $|\text{TotalProfit}|$.
+
+\textbf{Finding:}
+47 products are being sold at a loss across various branches, totalling \textbf{30.1\,M~LBP} in direct losses. These include food items where COGS exceeds the selling price.
+
+\textbf{Recommendation:} Reprice or discontinue every loss-making SKU.
+
+\subsection{Leak 2: Zero-Revenue Modifiers {\normalfont\color{critred}(28.1\,M)}}
+
+\textbf{Detection:}
+We filter product rows where $\text{TotalPrice} = 0$ (charged nothing to the customer) but $\text{TotalCost} > 0$ (real ingredient cost) and $\text{Qty} > 0$.
+
+\textbf{Finding:}
+Items like decaf shots, lactose-free milk, skimmed milk, and other modifiers are given away for free but have real cost of goods. The total absorbed cost is \textbf{28.1\,M~LBP}.
+
+\textbf{Recommendation:} Add a nominal surcharge (30--50\% of cost) for premium modifiers, or explicitly track as a customer loyalty cost.
+
+\subsection{Leak 3: Cheesecake Underpricing {\normalfont\color{accent}(2.1\,M)}}
+
+\textbf{Detection:}
+We filter all cheesecake variants and compute their aggregate margin. We then compare to the food category average margin:
+\[
+\text{Margin Gap} = \text{Food Avg Margin} - \text{Cheesecake Margin}
+\]
+\[
+\text{Additional Profit Potential} = \text{Cheesecake Revenue} \times \frac{\text{Margin Gap}}{100}
+\]
+
+\textbf{Finding:}
+All cheesecake varieties run significantly below the food average margin, leaving \textbf{2.1\,M~LBP} on the table.
+
+\textbf{Recommendation:} Raise cheesecake prices by 15--20\% or renegotiate supplier costs.
+
+\subsection{Leak 4: Veggie Sub Mispricing {\normalfont\color{critred}(1.7\,M)}}
+
+\textbf{Detection:}
+We isolate all products containing ``VEGGIE'' and compute average unit price vs.\ unit cost. We benchmark against other subs and sandwiches with $> 30\%$ margin:
+\[
+\text{Recoverable} = (\text{Total Qty} \times \text{Benchmark Price}) - \text{Actual Revenue}
+\]
+
+\textbf{Finding:}
+The Veggie Sub is priced \textit{below its own ingredient cost}. Compared to what similar subs are priced at, the chain is losing \textbf{1.7\,M~LBP}.
+
+\textbf{Recommendation:} Immediately reprice to the sub-category benchmark.
+
+\subsection{Leak 5: Amioun TABLE POS Error {\normalfont\color{accent}(49\,K)}}
+
+\textbf{Detection:}
+We filter the Amioun branch, TABLE service type, where $\text{ProfitPct} < 0$ and $\text{Qty} > 0$.
+
+\textbf{Finding:}
+Systematic underpricing on dine-in items at the Amioun branch, causing \textbf{49\,K~LBP} in losses. This is likely a POS configuration error rather than a deliberate pricing decision.
+
+\textbf{Recommendation:} Audit and fix the POS pricing tables for the TABLE service type at Amioun.
+
+\subsection{Total Impact}
+
+\begin{table}[h]
+\centering
+\begin{tabular}{@{}lrll@{}}
+\toprule
+\textbf{Leak Category} & \textbf{Annual Loss (LBP)} & \textbf{Priority} & \textbf{Fix} \\
+\midrule
+Negative Margin Products & 30,100,000 & Critical & Reprice / discontinue \\
+Zero-Revenue Modifiers   & 28,100,000 & Medium   & Add nominal surcharge \\
+Cheesecake Underpricing  & 2,100,000  & Medium   & Price increase 15--20\% \\
+Veggie Sub Mispricing    & 1,700,000  & Critical & Reprice to benchmark \\
+Amioun TABLE POS Error   & 49,000     & Critical & Fix POS config \\
+\midrule
+\textbf{Total Recoverable} & \textbf{62,013,109} & & \\
+\bottomrule
+\end{tabular}
+\caption{Margin leak summary with prioritised recommendations.}
+\end{table}
+
+A waterfall chart visualises the cumulative impact: each leak is shown as a red bar, with the final blue bar showing total recoverable profit.
+
+\newpage
+% ════════════════════════════════════════
+\section{Menu Engineering}
+% ════════════════════════════════════════
+
+\subsection{Menu Matrix (BCG for Menus)}
+
+We aggregate every product across all branches (minimum 5 units sold; modifiers excluded) and compute chain-wide totals for quantity, revenue, cost, and profit. Two key metrics drive the classification:
+
+\begin{itemize}[leftmargin=*]
+  \item \textbf{Volume} = Total quantity sold chain-wide.
+  \item \textbf{Margin} = $\frac{\text{TotalProfit}}{\text{TotalRevenue}} \times 100$.
+\end{itemize}
+
+The median of each metric defines the quadrant thresholds:
+
+\begin{table}[h]
+\centering
+\begin{tabular}{@{}lll@{}}
+\toprule
+\textbf{Quadrant} & \textbf{Definition} & \textbf{Action} \\
+\midrule
+Star       & High volume + High margin  & Promote aggressively \\
+Plowhorse  & High volume + Low margin   & Reprice upward \\
+Puzzle     & Low volume + High margin   & Market more \\
+Dog        & Low volume + Low margin    & Consider removing \\
+\bottomrule
+\end{tabular}
+\caption{Menu engineering quadrant definitions.}
+\end{table}
+
+\textbf{Result:} 409 products classified. An interactive scatter plot is produced with log-scaled X-axis (quantity), Y-axis (margin \%), bubble size proportional to revenue, and colour by quadrant.
+
+\subsection{Modifier Attachment Rate Analysis}
+
+We identify modifiers as products whose names start with ``ADD'' or ``REPLACE''. For each branch we compute:
+\[
+\text{Attach Rate} = \frac{\text{Modifier Qty}}{\text{Base Beverage Qty}} \times 100
+\]
+
+We then quantify the profit opportunity if every branch matched the top performer's attach rate:
+\[
+\text{Opportunity} = \sum_{\text{branches}} \left[(\text{Top Rate} - \text{Branch Rate}) \times \text{Base Qty} \times \text{Avg Profit per Modifier}\right]
+\]
+
+\textbf{Findings:}
+\begin{itemize}
+  \item Top modifier attach rate: \textbf{60.4\%}
+  \item If all branches matched the best: \textbf{16,914,823~LBP} additional profit.
+  \item A horizontal bar chart ranks all branches by attach rate.
+\end{itemize}
+
+\subsection{Top \& Bottom Products by Profit}
+
+We group all non-aggregate, non-modifier products chain-wide, sum their profit, and extract:
+\begin{itemize}
+  \item \textbf{Top 20} --- the biggest profit contributors.
+  \item \textbf{Bottom 20} --- the biggest profit drains (includes loss-makers).
+\end{itemize}
+
+\newpage
+% ════════════════════════════════════════
+\section{Sales Forecasting}
+% ════════════════════════════════════════
+
+\subsection{Approach}
+
+We forecast February--December 2026 revenue for each branch individually using a \textbf{Gradient Boosting Regressor} (scikit-learn). This was chosen over ARIMA or Prophet because we have limited time-series depth (13 monthly observations per branch) and Gradient Boosting handles small datasets with engineered features well.
+
+\subsection{Feature Engineering}
+
+Monthly data is converted to long format (one row per branch per month). Four features are computed:
+
+\begin{enumerate}[leftmargin=*]
+  \item \textbf{Cyclical month encoding:}
+    \[
+      \text{month\_sin} = \sin\!\left(\frac{2\pi \cdot \text{month}}{12}\right), \quad
+      \text{month\_cos} = \cos\!\left(\frac{2\pi \cdot \text{month}}{12}\right)
+    \]
+    This captures seasonality without an artificial cliff between December and January.
+
+  \item \textbf{Trend:}
+    \[
+      \text{months\_since\_start} = (\text{Year} - 2025) \times 12 + \text{Month}
+    \]
+
+  \item \textbf{Raw month number} (1--12), providing the model a direct seasonal signal.
+\end{enumerate}
+
+\subsection{Model Configuration}
+
+\begin{itemize}[leftmargin=*]
+  \item \texttt{n\_estimators} = 100, \texttt{max\_depth} = 3, \texttt{learning\_rate} = 0.1.
+  \item Training set: January 2025 -- January 2026 (all months with positive revenue).
+  \item Predictions are clipped at zero (revenue cannot be negative).
+\end{itemize}
+
+\subsection{Confidence Intervals}
+
+We compute residuals on the training set and use $\pm 1.5 \times \sigma_{\text{residual}}$ as the confidence band, clipped at zero on the lower end.
+
+\subsection{2026 Projections}
+
+For each branch:
+\[
+\text{Projected 2026} = \underbrace{\text{Jan 2026 (actual)}}_{\text{known}} + \underbrace{\sum_{m=2}^{12} \hat{y}_m}_{\text{forecast}}
+\]
+\[
+\text{YoY Growth} = \frac{\text{Projected 2026} - \text{Actual 2025}}{\text{Actual 2025}} \times 100
+\]
+
+\begin{table}[h]
+\centering
+\begin{tabular}{@{}lr@{}}
+\toprule
+\textbf{Metric} & \textbf{Value} \\
+\midrule
+Chain-Wide 2026 Projection & 1,056,960,141 LBP \\
+Year-over-Year Growth      & +26\% \\
+\bottomrule
+\end{tabular}
+\caption{2026 chain-wide revenue forecast.}
+\end{table}
+
+A per-branch chart overlays historical data (solid line), forecast (dashed line), confidence interval (shaded band), and the actual January 2026 data point (star marker).
+
+\newpage
+% ════════════════════════════════════════
+\section{Branch Clustering}
+% ════════════════════════════════════════
+
+\subsection{Feature Engineering}
+
+For each of the 25 branches, we compute a 10-dimensional profile:
+
+\begin{table}[h]
+\centering
+\begin{tabularx}{\textwidth}{@{}lX@{}}
+\toprule
+\textbf{Feature} & \textbf{How It's Computed} \\
+\midrule
+Total Revenue         & 2025 annual total from Monthly Sales. \\
+Active Months         & Count of months with revenue $> 0$. \\
+Seasonality CV        & Coefficient of variation (std / mean) across active months. Higher = more seasonal. \\
+Summer/Winter Ratio   & $\frac{\text{Jun + Jul + Aug revenue}}{\text{Dec + Jan + Feb revenue}}$. \\
+Growth \%             & Jan 2026 vs.\ Jan 2025 year-over-year change. \\
+Beverage Share \%     & $\frac{\text{Beverage Revenue}}{\text{Beverage + Food Revenue}} \times 100$. \\
+Profit Margin \%      & $\frac{\text{TotalProfit}}{\text{TrueRevenue}} \times 100$ from Category Summary. \\
+Total Quantity        & Sum of all units sold. \\
+Service Type Count    & Number of distinct service channels (TAKE AWAY, TABLE, Toters). \\
+Revenue per Month     & $\frac{\text{Total Revenue}}{\text{Active Months}}$ — efficiency metric. \\
+\bottomrule
+\end{tabularx}
+\caption{Branch clustering feature set.}
+\end{table}
+
+\subsection{Clustering Method}
+
+\begin{enumerate}[leftmargin=*]
+  \item \textbf{Normalisation:} StandardScaler (zero mean, unit variance) on 6 selected features: Revenue, Seasonality CV, Growth, Beverage Share, Margin, Revenue per Month.
+  \item \textbf{Algorithm:} KMeans with $k = 4$, 10 random initialisations, fixed seed for reproducibility.
+  \item \textbf{Cluster naming:} Automatic, based on whether the cluster's average revenue and growth are above or below the chain median:
+    \begin{itemize}
+      \item \textbf{Flagship} --- high revenue \textit{and} positive growth.
+      \item \textbf{Cash Cow} --- high revenue, slower growth.
+      \item \textbf{Growth Engine} --- lower revenue but above-median growth.
+      \item \textbf{Emerging} --- below median on both axes.
+    \end{itemize}
+\end{enumerate}
+
+\textbf{Result:} 4 strategic segments identified.
+
+\subsection{Visualisation}
+
+\begin{itemize}[leftmargin=*]
+  \item \textbf{Cluster scatter:} X = Revenue per Month, Y = Profit Margin \%, bubble size = Quantity, colour = Cluster.
+  \item \textbf{Radar chart:} 6 normalised metrics (0--1 scale) per cluster, overlaid as filled polygons for direct comparison.
+\end{itemize}
+
+\subsection{Strategic Recommendations per Cluster}
+
+\begin{table}[h]
+\centering
+\begin{tabularx}{\textwidth}{@{}lX@{}}
+\toprule
+\textbf{Segment} & \textbf{Strategy} \\
+\midrule
+Flagship      & \textit{Protect \& Optimise} --- Focus on margin improvement, modifier upsells, and operational efficiency. Don't change what works. \\
+Cash Cow      & \textit{Harvest Profits} --- Optimise costs, push high-margin products, consider innovation to reignite growth. \\
+Growth Engine & \textit{Invest \& Expand} --- Increase marketing spend, introduce full product range, build local customer base. \\
+Emerging      & \textit{Evaluate \& Experiment} --- Test new products, understand local demand, decide on long-term viability. \\
+\bottomrule
+\end{tabularx}
+\caption{Cluster-specific strategic recommendations.}
+\end{table}
+
+\newpage
+% ════════════════════════════════════════
+\section{Summary of Key Findings}
+% ════════════════════════════════════════
+
+\begin{table}[h]
+\centering
+\begin{tabular}{@{}llr@{}}
+\toprule
+\textbf{Finding} & \textbf{Method} & \textbf{Value} \\
+\midrule
+Chain Revenue (2025)        & Sum of TrueRevenue across Category Summary    & 840,458,583 \\
+Chain Profit (2025)         & Sum of TotalProfit                             & 598,228,696 \\
+Average Margin              & Profit $\div$ Revenue $\times$ 100             & 71.2\% \\
+Total Margin Leaks          & 5 leak detectors summed                        & 62,013,109 \\
+Modifier Upsell Opportunity & Gap-to-best attach rate $\times$ avg profit    & 16,914,823 \\
+2026 Revenue Forecast       & GradientBoosting per branch, summed            & 1,056,960,141 \\
+Projected YoY Growth        & (Forecast 2026 $-$ Actual 2025) / Actual 2025  & +26\% \\
+Products Analysed           & Unique non-aggregate products                  & 13,089 rows \\
+Menu Matrix Items           & Chain-level aggregation, min 5 units           & 409 products \\
+Branch Clusters             & KMeans, $k=4$                                  & 4 segments \\
+\bottomrule
+\end{tabular}
+\caption{Summary of all key findings and their derivation methods.}
+\end{table}
+
+\vspace{1cm}
+
+\begin{center}
+\fcolorbox{coffee}{lightcoffee}{%
+  \begin{minipage}{0.85\textwidth}
+  \centering\large
+  \textbf{Bottom Line:} Stories Coffee has strong unit economics (71\% margin) \\[4pt]
+  but is leaving \textbf{62\,M in margin leaks} and \textbf{16.9\,M in modifier upsell} \\[4pt]
+  on the table --- nearly \textbf{10\%} of total revenue is recoverable.
+  \end{minipage}%
+}
+\end{center}
+
+\end{document}

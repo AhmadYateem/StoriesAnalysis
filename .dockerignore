@@ -1,0 +1,27 @@
+# Byte-compiled
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Data cache (rebuilt on startup)
+data/cleaned/*.parquet
+
+# Exports
+exports/
+
+# Archive (raw originals kept separately)
+Archive/
