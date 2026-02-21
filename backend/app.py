@@ -484,8 +484,8 @@ def upload_and_analyze():
 
 # ─── AI Chat via HuggingFace Inference API ───────────────────────────────────
 # Using Qwen2.5-7B-Instruct — no license gate, strong instruction following
-HF_MODEL = "meta-llama/Llama-4-Scout-17B-16E-Instruct"
-HF_API_URL = f"https://router.huggingface.co/hf-inference/models/{HF_MODEL}/v1/chat/completions"
+HF_MODEL = "meta-llama/Llama-4-Scout-17B-16E-Instruct:nscale"
+HF_API_URL = "https://router.huggingface.co/v1/chat/completions"
 
 @app.route("/api/chat", methods=["POST"])
 def chat():
