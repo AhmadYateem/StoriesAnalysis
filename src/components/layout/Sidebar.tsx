@@ -20,6 +20,7 @@ import {
   Coffee,
   PanelLeftClose,
   PanelLeftOpen,
+  RotateCcw,
 } from "lucide-react";
 import { useDataContext } from "@/context/DataContext";
 
@@ -35,7 +36,7 @@ const NAV_ITEMS = [
 export default function Sidebar() {
   const [collapsed, setCollapsed] = useState(false);
   const location = useLocation();
-  const { state: dataState } = useDataContext();
+  const { state: dataState, dispatch } = useDataContext();
 
   return (
     <motion.aside
@@ -135,7 +136,33 @@ export default function Sidebar() {
                 }`} />
                 {dataState.source === "uploaded" ? "Custom Upload" : "Default Dataset"}
               </div>
+              {/* Reset button — only shown when custom data is loaded */}
+              {dataState.source === "uploaded" && (
+                <button
+                  onClick={() => dataState && dispatch({ type: "RESET" })}
+                  className="mt-2 w-full flex items-center justify-center gap-1.5 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20 px-2 py-1.5 text-[10px] font-bold text-amber-400 hover:text-amber-300 transition-all duration-200"
+                  title="Reload the original Stories Coffee 2025 dataset"
+                >
+                  <RotateCcw className="w-3 h-3" />
+                  Reset to Stories Data
+                </button>
+              )}
             </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── Collapsed reset button (icon only) ── */}
+      <AnimatePresence>
+        {collapsed && dataState.source === "uploaded" && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="px-3 pb-3">
+            <button
+              onClick={() => dispatch({ type: "RESET" })}
+              className="w-full flex items-center justify-center rounded-xl bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20 p-2.5 text-amber-400 hover:text-amber-300 transition-all duration-200"
+              title="Reset to Stories Coffee default data"
+            >
+              <RotateCcw className="w-4 h-4" />
+            </button>
           </motion.div>
         )}
       </AnimatePresence>

@@ -482,18 +482,21 @@ def upload_and_analyze():
         return jsonify({"error": str(e)}), 500
 
 
-# ─── LLaMA Chat via HuggingFace Inference API ─────────────────────────────────
-
-HF_TOKEN = os.environ.get("HF_TOKEN", "")
+# ─── AI Chat via HuggingFace Inference API ───────────────────────────────────
+# Using Qwen2.5-7B-Instruct — no license gate, strong instruction following
+HF_MODEL = "Qwen/Qwen2.5-7B-Instruct"
+HF_API_URL = f"https://api-inference.huggingface.co/models/{HF_MODEL}/v1/chat/completions"
 
 @app.route("/api/chat", methods=["POST"])
 def chat():
     """
-    Proxy chat requests to HuggingFace LLaMA 3.1 Inference API.
+    Proxy chat requests to HuggingFace Inference API.
     The API key stays server-side — never exposed to the client.
     """
-    if not HF_TOKEN:
-        return jsonify({"error": "HuggingFace token not configured on server"}), 503
+    # Read token dynamically so WSGI env var changes take effect without restart
+    hf_token = os.environ.get("HF_TOKEN", "").strip()
+    if not hf_token or hf_token == "PASTE_YOUR_HF_TOKEN_HERE":
+        return jsonify({"error": "HuggingFace token not configured on server. Set HF_TOKEN in WSGI file."}), 503
 
     try:
         body = request.get_json()
@@ -509,22 +512,24 @@ def chat():
 
         import requests as http_requests
         hf_response = http_requests.post(
-            "https://api-inference.huggingface.co/models/meta-llama/Llama-3.1-8B-Instruct/v1/chat/completions",
+            HF_API_URL,
             headers={
-                "Authorization": f"Bearer {HF_TOKEN}",
+                "Authorization": f"Bearer {hf_token}",
                 "Content-Type": "application/json",
             },
             json={
-                "model": "meta-llama/Llama-3.1-8B-Instruct",
+                "model": HF_MODEL,
                 "messages": messages,
-                "max_tokens": 1024,
+                "max_tokens": 800,
                 "temperature": 0.7,
             },
-            timeout=30,
+            timeout=45,
         )
 
         if hf_response.status_code != 200:
-            return jsonify({"error": f"HuggingFace API error: {hf_response.text}"}), 502
+            error_detail = hf_response.text[:500]  # truncate long errors
+            print(f"[HF API Error] {hf_response.status_code}: {error_detail}")
+            return jsonify({"error": f"HF API {hf_response.status_code}: {error_detail}"}), 502
 
         data = hf_response.json()
         reply = data.get("choices", [{}])[0].get("message", {}).get("content", "No response generated.")

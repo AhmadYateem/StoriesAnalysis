@@ -140,21 +140,41 @@ export default function UploadPage() {
         </p>
       </motion.div>
 
-      {/* Current dataset badge */}
+      {/* Current dataset badge + prominent reset when custom data loaded */}
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ delay: 0.2 }}
-        className="flex items-center gap-3 bg-secondary/40 rounded-xl px-4 py-2.5 w-fit"
+        className="space-y-3"
       >
-        <FileText className="w-4 h-4 text-muted-foreground" />
-        <span className="text-xs font-semibold text-muted-foreground">
-          Active dataset: <span className="text-foreground">{data.datasetName}</span>
-        </span>
+        <div className="flex items-center gap-3 bg-secondary/40 rounded-xl px-4 py-2.5 w-fit">
+          <FileText className="w-4 h-4 text-muted-foreground" />
+          <span className="text-xs font-semibold text-muted-foreground">
+            Active dataset: <span className="text-foreground">{data.datasetName}</span>
+          </span>
+        </div>
+
+        {/* Prominent reset banner — only when custom data is active */}
         {data.datasetName !== "Stories Coffee · Full Year 2025" && (
-          <button onClick={resetToDefault} className="text-xs text-accent font-semibold hover:underline flex items-center gap-1">
-            <RefreshCw className="w-3 h-3" /> Reset to default
-          </button>
+          <motion.div
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="flex items-center justify-between gap-4 rounded-xl border border-amber-500/30 bg-amber-500/5 px-5 py-4"
+          >
+            <div>
+              <p className="text-sm font-bold text-amber-600">Custom dataset loaded</p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                The dashboard is showing your uploaded data. Click reset to reload the original Stories Coffee 2025 analysis.
+              </p>
+            </div>
+            <button
+              onClick={resetToDefault}
+              className="shrink-0 flex items-center gap-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-white font-bold text-sm px-4 py-2.5 transition-all duration-200 shadow-sm"
+            >
+              <RefreshCw className="w-4 h-4" />
+              Reset to Stories Data
+            </button>
+          </motion.div>
         )}
       </motion.div>
 
